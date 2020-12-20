@@ -1,0 +1,41 @@
+[package]
+name = "streamhist"
+version = "0.0.1-alpha.1"
+authors = ["Nikolay Novik <nickolainovik@gmail.com>"]
+edition = "2018"
+
+readme = "README.md"
+description = "Implementation of streaming histogram"
+
+exclude = [".github", ".gitignore"]
+
+homepage = "https://github.com/jettify/hyperbitbit"
+repository = "https://github.com/jettify/hyperbitbit.git"
+
+keywords = ["collections", "data-structures", "probabilistic"]
+categories = ["algorithms", "data-structures"]
+
+license = "Apache-2.0"
+
+[dependencies]
+
+[dependencies.serde]
+package = "serde"
+optional = true
+version = "1.0.103"
+default-features = false
+features = ["std", "derive"]
+
+
+[features]
+serde_support = ["serde"]
+
+[dev-dependencies]
+rand = "0.7.3"
+serde_json = "1.0.59"
+
+[profile.release]
+debug=true
+
+[profile.bench]
+debug=true
