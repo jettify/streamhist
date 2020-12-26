@@ -21,12 +21,12 @@ fn main() {
     let exact_var: f64 = vals.iter().map(|v| (v - exact_mean).powf(2.0) / n).sum();
 
     println!("------------------------------------------------");
-    println!("StreamHist Mean {:?}", &hist.mean());
+    println!("StreamHist Mean {:?}", hist.mean());
     println!("Mean            {:?}", exact_mean);
-    println!("Abs Difference  {:?}", exact_mean - &hist.mean());
+    println!("Abs Difference  {:?}", exact_mean - hist.mean());
     println!("------------------------------------------------");
-    println!("StreamHist Var  {:?}", &hist.var());
+    println!("StreamHist Var  {:?}", hist.var());
     println!("Var             {:?}", exact_var);
-    println!("ABS Difference  {:?}", exact_var - &hist.var());
+    println!("ABS Difference  {:?}", exact_var - hist.var());
     println!("------------------------------------------------");
 }
