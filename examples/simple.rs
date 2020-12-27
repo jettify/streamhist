@@ -12,7 +12,7 @@ fn main() {
     let vals: Vec<f64> = (0..maxn).map(|_| normal.sample(&mut rng)).collect();
 
     for v in vals.iter() {
-        hist.add(*v, 1);
+        hist.insert(*v, 1);
     }
 
     let n: f64 = vals.len() as f64;
