@@ -1,5 +1,3 @@
-// #![feature(core_intrinsics)]
-// use std::intrinsics::breakpoint;
 use std::convert::TryFrom;
 
 #[derive(Copy, Clone, Debug)]
@@ -41,6 +39,9 @@ impl Default for StreamHist {
 
 impl StreamHist {
     pub fn new(max_centroids: u16) -> StreamHist {
+        if max_centroids == 0 {
+            panic!("Max number of centroids can not be zero.");
+        };
         let size = usize::try_from(max_centroids).unwrap() + 1;
         StreamHist {
             min: f64::MAX,
@@ -58,16 +59,28 @@ impl StreamHist {
         self.centroids.clear();
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
     pub fn count(&self) -> u64 {
         self.count
     }
 
-    pub fn max(&self) -> f64 {
-        self.max
+    pub fn max(&self) -> Option<f64> {
+        if self.count() == 0 {
+            None
+        } else {
+            Some(self.max)
+        }
     }
 
-    pub fn min(&self) -> f64 {
-        self.min
+    pub fn min(&self) -> Option<f64> {
+        if self.count() == 0 {
+            None
+        } else {
+            Some(self.min)
+        }
     }
 
     pub fn insert(&mut self, value: f64, count: u64) {
@@ -94,8 +107,7 @@ impl StreamHist {
         }
 
         let l = self.closest_centroids();
-        // TODO: use copy
-        let cj = self.centroids[l + 1].clone();
+        let cj = self.centroids[l + 1];
         let ci = &mut self.centroids[l];
         ci.merge(&cj);
         self.centroids.remove(l + 1);
@@ -183,6 +195,7 @@ impl StreamHist {
         self.quantile(0.5)
     }
 
+    #[inline]
     fn border_centroids(&self, k: usize) -> (Centroid, Centroid) {
         if k == 0 {
             return (
@@ -241,17 +254,48 @@ mod tests {
     #[test]
     fn test_basic_ctor() {
         let mut hist = StreamHist::new(3);
+        assert!(hist.is_empty());
+
         hist.insert(25.0, 1);
         hist.insert(21.0, 1);
         hist.insert(20.0, 1);
 
-        assert_relative_eq!(hist.max(), 25.0);
-        assert_relative_eq!(hist.min(), 20.0);
+        assert!(!hist.is_empty());
+
         assert_eq!(hist.count(), 3);
-        assert_relative_eq!(hist.quantile(0.0), 20.0);
-        assert_relative_eq!(hist.quantile(1.0), 25.0);
         assert_eq!(hist.count_less_then_eq(-100.0), 0);
         assert_eq!(hist.count_less_then_eq(100.0), 3);
+        assert_relative_eq!(hist.max().unwrap(), 25.0);
+        assert_relative_eq!(hist.min().unwrap(), 20.0);
+        assert_relative_eq!(hist.quantile(0.0), 20.0);
+        assert_relative_eq!(hist.quantile(1.0), 25.0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_zero_centroids() {
+        StreamHist::new(0);
+    }
+
+    #[test]
+    fn test_same_value() {
+        let mut hist = StreamHist::new(3);
+        hist.insert(25.0, 1);
+        hist.insert(25.0, 1);
+        hist.insert(25.0, 1);
+        hist.insert(25.0, 1);
+        hist.insert(25.0, 1);
+        assert_eq!(hist.centroids.len(), 1);
+
+        assert_relative_eq!(hist.max().unwrap(), 25.0);
+        assert_relative_eq!(hist.min().unwrap(), 25.0);
+        assert_relative_eq!(hist.quantile(0.0), 25.0);
+        assert_relative_eq!(hist.quantile(1.0), 25.0);
+        assert_relative_eq!(hist.median(), 25.0);
+        assert_relative_eq!(hist.var(), 0.0);
+        assert_eq!(hist.count_less_then_eq(-100.0), 0);
+        assert_eq!(hist.count_less_then_eq(100.0), 5);
+        assert_eq!(hist.count(), 5);
     }
 
     #[test]
@@ -282,9 +326,11 @@ mod tests {
     }
 
     fn assert_distribution(mut vals: Vec<f64>, mut hist: StreamHist, tol: f64) {
+        assert!(hist.is_empty());
         for v in vals.iter() {
             hist.insert(*v, 1);
         }
+        assert!(!hist.is_empty());
         vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
         let n: f64 = vals.len() as f64;
@@ -293,10 +339,10 @@ mod tests {
         let exact_var: f64 = vals.iter().map(|v| (v - exact_mean).powf(2.0) / n).sum();
         let exact_median: f64 = vals[vals.len() / 2];
         let exact_sum: u64 = vals.iter().map(|v| if *v <= 2.0 { 1 } else { 0 }).sum();
-        assert_relative_eq!(hist.min(), vals[0]);
-        assert_relative_eq!(hist.max(), vals[vals.len() - 1]);
-        assert_eq!(hist.count(), vals.len() as u64);
 
+        assert_eq!(hist.count(), vals.len() as u64);
+        assert_relative_eq!(hist.min().unwrap(), vals[0]);
+        assert_relative_eq!(hist.max().unwrap(), vals[vals.len() - 1]);
         assert_relative_eq!(hist.mean(), exact_mean, max_relative = tol);
         assert_relative_eq!(hist.var(), exact_var, max_relative = tol);
         assert_relative_eq!(hist.median(), exact_median, max_relative = tol);
@@ -305,6 +351,12 @@ mod tests {
             hist.count_less_then_eq(2.0) as f64,
             exact_sum as f64,
             max_relative = tol
+        );
+
+        assert_eq!(hist.count_less_then_eq(vals[0] - 1.0), 0);
+        assert_eq!(
+            hist.count_less_then_eq(vals[vals.len() - 1] + 1.0),
+            vals.len() as u64
         );
     }
 
@@ -344,13 +396,35 @@ mod tests {
         assert_distribution(vals, hist, tol)
     }
 
-    //#[test]
+    #[test]
     fn test_uniform_distribution() {
         let mut rng = Isaac64Rng::seed_from_u64(42);
-        let dist = Uniform::new(-1000.0, 1000.0);
+        let dist = Uniform::new(-10.0, 100.0);
         let hist = StreamHist::new(64);
 
         let tol = 0.01;
+        let maxn = 10000;
+        let vals: Vec<f64> = (0..maxn).map(|_| dist.sample(&mut rng)).collect();
+        assert_distribution(vals, hist, tol)
+    }
+
+    #[test]
+    fn test_all_values_the_same() {
+        let hist = StreamHist::new(2);
+
+        let tol = 0.0001;
+        let maxn = 10000;
+        let vals: Vec<f64> = vec![17.0; maxn];
+        assert_distribution(vals, hist, tol)
+    }
+
+    #[test]
+    fn test_normal_distribution_one_centroid() {
+        let mut rng = Isaac64Rng::seed_from_u64(42);
+        let dist = Normal::new(2.0, 3.0).unwrap();
+        let hist = StreamHist::new(1);
+
+        let tol = 0.5;
         let maxn = 10000;
         let vals: Vec<f64> = (0..maxn).map(|_| dist.sample(&mut rng)).collect();
         assert_distribution(vals, hist, tol)
