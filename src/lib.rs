@@ -1,3 +1,4 @@
+#![warn(clippy::all)]
 use std::convert::TryFrom;
 
 #[derive(Copy, Clone, Debug)]
@@ -83,6 +84,10 @@ impl StreamHist {
         }
     }
 
+    pub fn insert_one(&mut self, value: f64) {
+        self.insert(value, 1)
+    }
+
     pub fn insert(&mut self, value: f64, count: u64) {
         self.min = f64::min(self.min, value);
         self.max = f64::max(self.max, value);
@@ -112,21 +117,33 @@ impl StreamHist {
         ci.merge(&cj);
         self.centroids.remove(l + 1);
     }
-    pub fn mean(&self) -> f64 {
+
+    pub fn mean(&self) -> Option<f64> {
+        if self.count == 0 {
+            return None;
+        }
         let n: f64 = self.count as f64;
-        self.centroids
+        let m = self
+            .centroids
             .iter()
             .map(|c| c.value * (c.count as f64) / n)
-            .sum()
+            .sum();
+        Some(m)
     }
 
-    pub fn var(&self) -> f64 {
-        let m: f64 = self.mean();
-        let n: f64 = self.count as f64;
-        self.centroids
-            .iter()
-            .map(|c| (c.value - m).powf(2.0) * (c.count as f64) / n)
-            .sum()
+    pub fn var(&self) -> Option<f64> {
+        match self.mean() {
+            Some(m) => {
+                let n: f64 = self.count as f64;
+                let v = self
+                    .centroids
+                    .iter()
+                    .map(|c| (c.value - m).powf(2.0) * (c.count as f64) / n)
+                    .sum();
+                Some(v)
+            }
+            _ => None,
+        }
     }
 
     pub fn sum(&self, value: f64) -> u64 {
@@ -149,12 +166,15 @@ impl StreamHist {
         s + (0.5 * ci_count + 0.5 * (ci_count + mb) * r).round() as u64
     }
 
-    pub fn quantile(&self, q: f64) -> f64 {
+    pub fn quantile(&self, q: f64) -> Option<f64> {
+        if self.count == 0 {
+            return None;
+        }
         if q < 0.0 {
-            return self.min;
+            return Some(self.min);
         }
         if q > 1.0 {
-            return self.max;
+            return Some(self.max);
         }
 
         let t: f64 = q * (self.count as f64);
@@ -173,8 +193,9 @@ impl StreamHist {
             s += half_count + prev_half_count;
             prev_half_count = half_count;
         }
+        // TODO check this logic
         if idx.is_none() {
-            return self.max;
+            return Some(self.max);
         }
         let (ci, cj) = self.border_centroids(idx.unwrap());
 
@@ -183,15 +204,15 @@ impl StreamHist {
         let d = t - s;
         let a = (cj_count - ci_count) as f64;
         if a == 0.0 {
-            return ci.value + (cj.value - ci.value) * (d / ci_count);
+            return Some(ci.value + (cj.value - ci.value) * (d / ci_count));
         }
         let b = 2.0 * ci_count;
         let c = -2.0 * d;
         let z = (-b + (b * b - 4.0 * a * c).sqrt()) / (2.0 * a);
-        ci.value + (cj.value - ci.value) * z
+        Some(ci.value + (cj.value - ci.value) * z)
     }
 
-    pub fn median(&self) -> f64 {
+    pub fn median(&self) -> Option<f64> {
         self.quantile(0.5)
     }
 
@@ -267,8 +288,26 @@ mod tests {
         assert_eq!(hist.count_less_then_eq(100.0), 3);
         assert_relative_eq!(hist.max().unwrap(), 25.0);
         assert_relative_eq!(hist.min().unwrap(), 20.0);
-        assert_relative_eq!(hist.quantile(0.0), 20.0);
-        assert_relative_eq!(hist.quantile(1.0), 25.0);
+        assert_relative_eq!(hist.quantile(0.0).unwrap(), 20.0);
+        assert_relative_eq!(hist.quantile(1.0).unwrap(), 25.0);
+    }
+
+    #[test]
+    fn test_empty_struct() {
+        let hist = StreamHist::new(3);
+        assert!(hist.is_empty());
+
+        assert_eq!(hist.count(), 0);
+        assert_eq!(hist.count_less_then_eq(-100.0), 0);
+        assert_eq!(hist.count_less_then_eq(100.0), 0);
+        assert_eq!(hist.max(), None);
+        assert_eq!(hist.mean(), None);
+        assert_eq!(hist.median(), None);
+        assert_eq!(hist.min(), None);
+        assert_eq!(hist.quantile(0.0), None);
+        assert_eq!(hist.quantile(1.0), None);
+        assert_eq!(hist.var(), None);
+
     }
 
     #[test]
@@ -289,10 +328,10 @@ mod tests {
 
         assert_relative_eq!(hist.max().unwrap(), 25.0);
         assert_relative_eq!(hist.min().unwrap(), 25.0);
-        assert_relative_eq!(hist.quantile(0.0), 25.0);
-        assert_relative_eq!(hist.quantile(1.0), 25.0);
-        assert_relative_eq!(hist.median(), 25.0);
-        assert_relative_eq!(hist.var(), 0.0);
+        assert_relative_eq!(hist.quantile(0.0).unwrap(), 25.0);
+        assert_relative_eq!(hist.quantile(1.0).unwrap(), 25.0);
+        assert_relative_eq!(hist.median().unwrap(), 25.0);
+        assert_relative_eq!(hist.var().unwrap(), 0.0);
         assert_eq!(hist.count_less_then_eq(-100.0), 0);
         assert_eq!(hist.count_less_then_eq(100.0), 5);
         assert_eq!(hist.count(), 5);
@@ -343,10 +382,14 @@ mod tests {
         assert_eq!(hist.count(), vals.len() as u64);
         assert_relative_eq!(hist.min().unwrap(), vals[0]);
         assert_relative_eq!(hist.max().unwrap(), vals[vals.len() - 1]);
-        assert_relative_eq!(hist.mean(), exact_mean, max_relative = tol);
-        assert_relative_eq!(hist.var(), exact_var, max_relative = tol);
-        assert_relative_eq!(hist.median(), exact_median, max_relative = tol);
-        assert_relative_eq!(hist.quantile(0.5), exact_median, max_relative = tol);
+        assert_relative_eq!(hist.mean().unwrap(), exact_mean, max_relative = tol);
+        assert_relative_eq!(hist.var().unwrap(), exact_var, max_relative = tol);
+        assert_relative_eq!(hist.median().unwrap(), exact_median, max_relative = tol);
+        assert_relative_eq!(
+            hist.quantile(0.5).unwrap(),
+            exact_median,
+            max_relative = tol
+        );
         assert_relative_eq!(
             hist.count_less_then_eq(2.0) as f64,
             exact_sum as f64,
@@ -399,8 +442,8 @@ mod tests {
     #[test]
     fn test_uniform_distribution() {
         let mut rng = Isaac64Rng::seed_from_u64(42);
-        let dist = Uniform::new(-10.0, 100.0);
-        let hist = StreamHist::new(64);
+        let dist = Uniform::new(0.0, 1.0);
+        let hist = StreamHist::new(16);
 
         let tol = 0.01;
         let maxn = 10000;
