@@ -1,3 +1,40 @@
+//! A rust implementation of a streaming centroid histogram algorithm found in
+//!  [Streaming Parallel Decision Trees](http://jmlr.org/papers/volume11/ben-haim10a/ben-haim10a.pdf)
+//!  paper by Ben-Haim/Tom-Tov.
+//!
+//! # Example
+//!
+//! ```rust
+//! use rand::SeedableRng;
+//! use rand_distr::{Distribution, Normal};
+//! use rand_isaac::Isaac64Rng;
+//! use streamhist::StreamHist;
+//!
+//! fn main() {
+//!     let mut rng = Isaac64Rng::seed_from_u64(42);
+//!     let dist = Normal::new(2.0, 3.0).unwrap();
+//!     let mut hist = StreamHist::new(32);
+//!
+//!     let maxn = 10000;
+//!     let vals: Vec<f64> = (0..maxn).map(|_| dist.sample(&mut rng)).collect();
+//!
+//!     for v in vals.iter() {
+//!         hist.insert_one(*v);
+//!     }
+//!
+//!     println!("------------------------------------------------");
+//!     println!("Est Mean               {:?}", hist.mean().unwrap());
+//!     println!("Est Var                {:?}", hist.var().unwrap());
+//!     println!("Est Median             {:?}", hist.median().unwrap());
+//!     println!("Est Count vals <= 2.0  {:?}", hist.count_less_then_eq(2.0));
+//!     println!("Est quantile           {:?}", hist.quantile(0.75).unwrap());
+//!     println!("Min                    {:?}", hist.min().unwrap());
+//!     println!("Max                    {:?}", hist.max().unwrap());
+//!     println!("Count                  {:?}", hist.count());
+//!     println!("------------------------------------------------");
+//! }
+//!```
+
 #![warn(clippy::all)]
 use std::convert::TryFrom;
 
@@ -53,6 +90,17 @@ impl StreamHist {
         }
     }
 
+    /// Clearas all state like centroids and restests all counts.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamHist;
+    /// let mut hist = StreamHist::new(32);
+    /// hist.insert_one(10.0);
+    /// assert_eq!(hist.count(), 1);
+    /// hist.clear();
+    /// assert_eq!(hist.count(), 0)
+    /// ```
     pub fn clear(&mut self) {
         self.min = f64::MAX;
         self.max = f64::MIN;
@@ -60,6 +108,14 @@ impl StreamHist {
         self.centroids.clear();
     }
 
+    /// Returns true if this histogram has no recorded values.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamHist;
+    /// let mut hist = StreamHist::new(32);
+    /// assert!(hist.is_empty(), 1);
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
@@ -307,7 +363,6 @@ mod tests {
         assert_eq!(hist.quantile(0.0), None);
         assert_eq!(hist.quantile(1.0), None);
         assert_eq!(hist.var(), None);
-
     }
 
     #[test]
