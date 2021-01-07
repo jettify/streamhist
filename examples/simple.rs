@@ -25,10 +25,14 @@ fn main() {
     let exact_sum: u64 = vals.iter().map(|v| if *v <= 2.0 { 1 } else { 0 }).sum();
 
     println!("------------------------------------------------");
-    println!("Est Mean               {:?}", hist.mean());
-    println!("Est Var                {:?}", hist.var());
-    println!("Est Median             {:?}", hist.median());
+    println!("Est Mean               {:?}", hist.mean().unwrap());
+    println!("Est Var                {:?}", hist.var().unwrap());
+    println!("Est Median             {:?}", hist.median().unwrap());
     println!("Est Count vals <= 2.0  {:?}", hist.count_less_then_eq(2.0));
+    println!("Est quantile           {:?}", hist.quantile(0.75).unwrap());
+    println!("Min                    {:?}", hist.min().unwrap());
+    println!("Max                    {:?}", hist.max().unwrap());
+    println!("Count                  {:?}", hist.count());
     println!("------------------------------------------------");
     println!("Mean                   {:?}", exact_mean);
     println!("Var                    {:?}", exact_var);

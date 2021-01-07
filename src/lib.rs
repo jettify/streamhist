@@ -32,6 +32,8 @@
 //!     println!("Max                    {:?}", hist.max().unwrap());
 //!     println!("Count                  {:?}", hist.count());
 //!     println!("------------------------------------------------");
+//!
+//!     assert_eq!(hist.count(), maxn);
 //! }
 //!```
 
@@ -272,6 +274,15 @@ impl StreamHist {
         self.quantile(0.5)
     }
 
+    pub fn merge(&mut self, other: &Self) {
+        for c in other.centroids.iter() {
+            self.insert(c.value, c.count)
+        }
+    }
+
+    pub fn count_less_then_eq(&self, value: f64) -> u64 {
+        self.sum(value)
+    }
     #[inline]
     fn border_centroids(&self, k: usize) -> (Centroid, Centroid) {
         if k == 0 {
@@ -294,10 +305,6 @@ impl StreamHist {
         (self.centroids[k - 1], self.centroids[k])
     }
 
-    pub fn count_less_then_eq(&self, value: f64) -> u64 {
-        self.sum(value)
-    }
-
     #[inline]
     fn closest_centroids(&self) -> usize {
         let mut min_dis = f64::MAX;
@@ -311,12 +318,6 @@ impl StreamHist {
             }
         }
         idx
-    }
-
-    pub fn merge(&mut self, other: &Self) {
-        for c in other.centroids.iter() {
-            self.insert(c.value, c.count)
-        }
     }
 }
 
