@@ -17,7 +17,7 @@ A rust implementation of a streaming centroid histogram algorithm found in
  fn main() {
      let mut rng = Isaac64Rng::seed_from_u64(42);
      let dist = Normal::new(2.0, 3.0).unwrap();
-     let mut hist = StreamHist::new(32);
+     let mut hist = StreamingHistogram::new(32);
 
      let maxn = 10000;
      let vals: Vec<f64> = (0..maxn).map(|_| dist.sample(&mut rng)).collect();
