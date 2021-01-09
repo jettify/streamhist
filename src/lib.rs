@@ -40,13 +40,18 @@
 #![warn(clippy::all)]
 use std::convert::TryFrom;
 
+/// Centroid is represented by value (p in paper) and its count (m in paper).
+/// Half of the `count` located to lest if centorid other to right.
 #[derive(Copy, Clone, Debug)]
-pub struct Centroid {
-    value: f64,
-    count: u64,
+struct Centroid {
+    value: f64,  // p
+    count: u64,  // m
 }
 
 impl Centroid {
+    // Merges two centroids into one, by simple summing counts and wighted sum
+    // of values
+    #[inline]
     fn merge(&mut self, other: &Centroid) {
         let sum = self.count + other.count;
         let val =
@@ -66,6 +71,7 @@ pub struct StreamingHistogram {
 }
 
 impl Default for StreamingHistogram {
+    /// Creates new StreamingHistogram with default `max_centroids=64`
     fn default() -> StreamingHistogram {
         StreamingHistogram {
             min: f64::MAX,
@@ -78,6 +84,27 @@ impl Default for StreamingHistogram {
 }
 
 impl StreamingHistogram {
+    /// Creates new StreamingHistogram
+    ///
+    /// * `max_centroids` indicates how many centroids should be used to estimate
+    /// statistics, more centroids more accurate estimation. Each centroids
+    /// stroes `f64` and `u64` and uses about 16 bytes of space.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.count(), 0)
+    /// ```
+    /// # Panics
+    ///
+    /// The function panics if the `max_centroids` is zero.
+    ///
+    /// ```rust,should_panic
+    /// use streamhist::StreamingHistogram;
+    /// // panics on empty histogram
+    /// let mut hist = StreamingHistogram::new(0);
+    /// ```
     pub fn new(max_centroids: u16) -> StreamingHistogram {
         if max_centroids == 0 {
             panic!("Max number of centroids can not be zero.");
@@ -122,10 +149,28 @@ impl StreamingHistogram {
         self.count == 0
     }
 
+    /// Returns number of items observed by histogram.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.count(), 0);
+    /// hist.insert_one(10.0);
+    /// assert_eq!(hist.count(), 1)
     pub fn count(&self) -> u64 {
         self.count
     }
 
+    /// Returns max value ever observed by histogram.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.max(), None);
+    /// hist.insert_one(10.0);
+    /// assert!(hist.max().unwrap() > 9.0);
     pub fn max(&self) -> Option<f64> {
         if self.count() == 0 {
             None
@@ -134,6 +179,15 @@ impl StreamingHistogram {
         }
     }
 
+    /// Returns min value ever observed by histogram.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.min(), None);
+    /// hist.insert_one(10.0);
+    /// assert!(hist.min().unwrap() > 9.0);
     pub fn min(&self) -> Option<f64> {
         if self.count() == 0 {
             None
@@ -283,6 +337,7 @@ impl StreamingHistogram {
     pub fn count_less_then_eq(&self, value: f64) -> u64 {
         self.sum(value)
     }
+
     #[inline]
     fn border_centroids(&self, k: usize) -> (Centroid, Centroid) {
         if k == 0 {
@@ -347,6 +402,14 @@ mod tests {
         assert_relative_eq!(hist.min().unwrap(), 20.0);
         assert_relative_eq!(hist.quantile(0.0).unwrap(), 20.0);
         assert_relative_eq!(hist.quantile(1.0).unwrap(), 25.0);
+    }
+
+    #[test]
+    fn test_default_ctor() {
+        let mut hist = StreamingHistogram::default();
+        hist.insert(25.0, 1);
+        assert!(!hist.is_empty());
+        assert_eq!(hist.count(), 1);
     }
 
     #[test]
