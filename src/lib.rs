@@ -8,12 +8,12 @@
 //! use rand::SeedableRng;
 //! use rand_distr::{Distribution, Normal};
 //! use rand_isaac::Isaac64Rng;
-//! use streamhist::StreamHist;
+//! use streamhist::StreamingHistogram;
 //!
 //! fn main() {
 //!     let mut rng = Isaac64Rng::seed_from_u64(42);
 //!     let dist = Normal::new(2.0, 3.0).unwrap();
-//!     let mut hist = StreamHist::new(32);
+//!     let mut hist = StreamingHistogram::new(32);
 //!
 //!     let maxn = 10000;
 //!     let vals: Vec<f64> = (0..maxn).map(|_| dist.sample(&mut rng)).collect();
@@ -40,13 +40,18 @@
 #![warn(clippy::all)]
 use std::convert::TryFrom;
 
+/// Centroid is represented by value (p in paper) and its count (m in paper).
+/// Half of the `count` located to lest if centorid other to right.
 #[derive(Copy, Clone, Debug)]
-pub struct Centroid {
-    value: f64,
-    count: u64,
+struct Centroid {
+    value: f64,  // p
+    count: u64,  // m
 }
 
 impl Centroid {
+    // Merges two centroids into one, by simple summing counts and wighted sum
+    // of values
+    #[inline]
     fn merge(&mut self, other: &Centroid) {
         let sum = self.count + other.count;
         let val =
@@ -57,7 +62,7 @@ impl Centroid {
 }
 
 #[derive(Clone, Debug)]
-pub struct StreamHist {
+pub struct StreamingHistogram {
     min: f64,
     max: f64,
     max_centroids: u16,
@@ -65,9 +70,10 @@ pub struct StreamHist {
     centroids: Vec<Centroid>,
 }
 
-impl Default for StreamHist {
-    fn default() -> StreamHist {
-        StreamHist {
+impl Default for StreamingHistogram {
+    /// Creates new StreamingHistogram with default `max_centroids=64`
+    fn default() -> StreamingHistogram {
+        StreamingHistogram {
             min: f64::MAX,
             max: f64::MIN,
             max_centroids: 64,
@@ -77,13 +83,34 @@ impl Default for StreamHist {
     }
 }
 
-impl StreamHist {
-    pub fn new(max_centroids: u16) -> StreamHist {
+impl StreamingHistogram {
+    /// Creates new StreamingHistogram
+    ///
+    /// * `max_centroids` indicates how many centroids should be used to estimate
+    /// statistics, more centroids more accurate estimation. Each centroids
+    /// stroes `f64` and `u64` and uses about 16 bytes of space.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.count(), 0)
+    /// ```
+    /// # Panics
+    ///
+    /// The function panics if the `max_centroids` is zero.
+    ///
+    /// ```rust,should_panic
+    /// use streamhist::StreamingHistogram;
+    /// // panics on empty histogram
+    /// let mut hist = StreamingHistogram::new(0);
+    /// ```
+    pub fn new(max_centroids: u16) -> StreamingHistogram {
         if max_centroids == 0 {
             panic!("Max number of centroids can not be zero.");
         };
         let size = usize::try_from(max_centroids).unwrap() + 1;
-        StreamHist {
+        StreamingHistogram {
             min: f64::MAX,
             max: f64::MIN,
             max_centroids: max_centroids,
@@ -96,8 +123,8 @@ impl StreamHist {
     ///
     /// # Example
     /// ```
-    /// use streamhist::StreamHist;
-    /// let mut hist = StreamHist::new(32);
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
     /// hist.insert_one(10.0);
     /// assert_eq!(hist.count(), 1);
     /// hist.clear();
@@ -114,18 +141,36 @@ impl StreamHist {
     ///
     /// # Example
     /// ```
-    /// use streamhist::StreamHist;
-    /// let mut hist = StreamHist::new(32);
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
     /// assert!(hist.is_empty(), 1);
     /// ```
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
 
+    /// Returns number of items observed by histogram.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.count(), 0);
+    /// hist.insert_one(10.0);
+    /// assert_eq!(hist.count(), 1)
     pub fn count(&self) -> u64 {
         self.count
     }
 
+    /// Returns max value ever observed by histogram.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.max(), None);
+    /// hist.insert_one(10.0);
+    /// assert!(hist.max().unwrap() > 9.0);
     pub fn max(&self) -> Option<f64> {
         if self.count() == 0 {
             None
@@ -134,6 +179,15 @@ impl StreamHist {
         }
     }
 
+    /// Returns min value ever observed by histogram.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.min(), None);
+    /// hist.insert_one(10.0);
+    /// assert!(hist.min().unwrap() > 9.0);
     pub fn min(&self) -> Option<f64> {
         if self.count() == 0 {
             None
@@ -283,6 +337,7 @@ impl StreamHist {
     pub fn count_less_then_eq(&self, value: f64) -> u64 {
         self.sum(value)
     }
+
     #[inline]
     fn border_centroids(&self, k: usize) -> (Centroid, Centroid) {
         if k == 0 {
@@ -323,7 +378,7 @@ impl StreamHist {
 
 #[cfg(test)]
 mod tests {
-    use super::StreamHist;
+    use super::StreamingHistogram;
     use approx::assert_relative_eq;
     use rand::SeedableRng;
     use rand_distr::{Distribution, Exp, LogNormal, Normal, Uniform};
@@ -331,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_basic_ctor() {
-        let mut hist = StreamHist::new(3);
+        let mut hist = StreamingHistogram::new(3);
         assert!(hist.is_empty());
 
         hist.insert(25.0, 1);
@@ -350,8 +405,16 @@ mod tests {
     }
 
     #[test]
+    fn test_default_ctor() {
+        let mut hist = StreamingHistogram::default();
+        hist.insert(25.0, 1);
+        assert!(!hist.is_empty());
+        assert_eq!(hist.count(), 1);
+    }
+
+    #[test]
     fn test_empty_struct() {
-        let hist = StreamHist::new(3);
+        let hist = StreamingHistogram::new(3);
         assert!(hist.is_empty());
 
         assert_eq!(hist.count(), 0);
@@ -369,12 +432,12 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_zero_centroids() {
-        StreamHist::new(0);
+        StreamingHistogram::new(0);
     }
 
     #[test]
     fn test_same_value() {
-        let mut hist = StreamHist::new(3);
+        let mut hist = StreamingHistogram::new(3);
         hist.insert(25.0, 1);
         hist.insert(25.0, 1);
         hist.insert(25.0, 1);
@@ -395,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_closest_centroids() {
-        let mut hist = StreamHist::new(3);
+        let mut hist = StreamingHistogram::new(3);
         hist.insert(1.0, 1);
         hist.insert(5.0, 1);
         hist.insert(11.0, 1);
@@ -409,8 +472,8 @@ mod tests {
     }
     #[test]
     fn test_merge() {
-        let mut hist = StreamHist::new(3);
-        let mut other = StreamHist::new(3);
+        let mut hist = StreamingHistogram::new(3);
+        let mut other = StreamingHistogram::new(3);
         hist.insert(1.0, 1);
         hist.insert(5.0, 1);
 
@@ -420,7 +483,7 @@ mod tests {
         assert_eq!(hist.count(), 22);
     }
 
-    fn assert_distribution(mut vals: Vec<f64>, mut hist: StreamHist, tol: f64) {
+    fn assert_distribution(mut vals: Vec<f64>, mut hist: StreamingHistogram, tol: f64) {
         assert!(hist.is_empty());
         for v in vals.iter() {
             hist.insert(*v, 1);
@@ -463,7 +526,7 @@ mod tests {
     fn test_normal_distribution() {
         let mut rng = Isaac64Rng::seed_from_u64(42);
         let dist = Normal::new(2.0, 3.0).unwrap();
-        let hist = StreamHist::new(64);
+        let hist = StreamingHistogram::new(64);
 
         let tol = 0.005;
         let maxn = 10000;
@@ -475,7 +538,7 @@ mod tests {
     fn test_log_normal_distribution() {
         let mut rng = Isaac64Rng::seed_from_u64(42);
         let dist = LogNormal::new(1.0, 1.0).unwrap();
-        let hist = StreamHist::new(64);
+        let hist = StreamingHistogram::new(64);
 
         let tol = 0.02;
         let maxn = 10000;
@@ -487,7 +550,7 @@ mod tests {
     fn test_exp_distribution() {
         let mut rng = Isaac64Rng::seed_from_u64(42);
         let dist = Exp::new(1.5).unwrap();
-        let hist = StreamHist::new(64);
+        let hist = StreamingHistogram::new(64);
 
         let tol = 0.05;
         let maxn = 10000;
@@ -499,7 +562,7 @@ mod tests {
     fn test_uniform_distribution() {
         let mut rng = Isaac64Rng::seed_from_u64(42);
         let dist = Uniform::new(0.0, 1.0);
-        let hist = StreamHist::new(16);
+        let hist = StreamingHistogram::new(16);
 
         let tol = 0.01;
         let maxn = 10000;
@@ -509,7 +572,7 @@ mod tests {
 
     #[test]
     fn test_all_values_the_same() {
-        let hist = StreamHist::new(2);
+        let hist = StreamingHistogram::new(2);
 
         let tol = 0.0001;
         let maxn = 10000;
@@ -521,7 +584,7 @@ mod tests {
     fn test_normal_distribution_one_centroid() {
         let mut rng = Isaac64Rng::seed_from_u64(42);
         let dist = Normal::new(2.0, 3.0).unwrap();
-        let hist = StreamHist::new(1);
+        let hist = StreamingHistogram::new(1);
 
         let tol = 0.5;
         let maxn = 10000;
