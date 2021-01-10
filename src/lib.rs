@@ -38,14 +38,23 @@
 //!```
 
 #![warn(clippy::all)]
+
 use std::convert::TryFrom;
+
+#[cfg(feature = "serde")]
+use serde_crate::{Deserialize, Serialize};
 
 /// Centroid is represented by value (p in paper) and its count (m in paper).
 /// Half of the `count` located to lest if centorid other to right.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 struct Centroid {
-    value: f64,  // p
-    count: u64,  // m
+    value: f64, // p
+    count: u64, // m
 }
 
 impl Centroid {
@@ -62,6 +71,11 @@ impl Centroid {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub struct StreamingHistogram {
     min: f64,
     max: f64,
@@ -590,5 +604,19 @@ mod tests {
         let maxn = 10000;
         let vals: Vec<f64> = (0..maxn).map(|_| dist.sample(&mut rng)).collect();
         assert_distribution(vals, hist, tol)
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde() {
+        let mut hist = StreamingHistogram::new(3);
+
+        hist.insert(1.0, 1);
+        hist.insert(5.0, 1);
+        hist.insert(11.0, 1);
+
+        let serialized_h = serde_json::to_string(&hist).unwrap();
+        let other_hist: StreamingHistogram = serde_json::from_str(&serialized_h).unwrap();
+        assert_eq!(hist.count(), other_hist.count());
     }
 }
