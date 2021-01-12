@@ -58,7 +58,7 @@ struct Centroid {
 }
 
 impl Centroid {
-    // Merges two centroids into one, by simple summing counts and wighted sum
+    // Merges two centroids into one, by simple summing counts and weighted sum
     // of values
     #[inline]
     fn merge(&mut self, other: &Centroid) {
@@ -244,6 +244,18 @@ impl StreamingHistogram {
         self.centroids.remove(l + 1);
     }
 
+    /// Returns estimate of mean value using centroids.
+    ///
+    /// Note, it is possible to compute exact mean value over data stream
+    /// using itertive algorithm. Estimate with centroids is resonably accurate
+    /// try with your distribution.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// hist.insert(10.0, 1);
+    /// assert!(hist.mean().unwrap() > 9.0);
     pub fn mean(&self) -> Option<f64> {
         if self.count == 0 {
             return None;
@@ -257,6 +269,19 @@ impl StreamingHistogram {
         Some(m)
     }
 
+    /// Returns estimate of variance value using centroids.
+    ///
+    /// Note, it is possible to compute exact mean value over data stream
+    /// using itertive algorithm. Estimate with centroids is resonably accurate
+    /// try with your distribution.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// hist.insert(10.0, 1);
+    /// hist.insert(15.0, 1);
+    /// assert!(hist.var().unwrap() < 7.0);
     pub fn var(&self) -> Option<f64> {
         match self.mean() {
             Some(m) => {
