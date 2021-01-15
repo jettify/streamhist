@@ -12,7 +12,7 @@ A rust implementation of a streaming centroid histogram algorithm found in
  use rand::SeedableRng;
  use rand_distr::{Distribution, Normal};
  use rand_isaac::Isaac64Rng;
- use streamhist::StreamHist;
+ use streamhist::StreamingHistogram;
 
  fn main() {
      let mut rng = Isaac64Rng::seed_from_u64(42);
