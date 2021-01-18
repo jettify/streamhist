@@ -1,5 +1,8 @@
 # StreamHist
 [![ci-badge](https://github.com/jettify/streamhist/workflows/CI/badge.svg)](https://github.com/jettify/streamhist/actions?query=workflow%3ACI)
+[![Crates.io](https://img.shields.io/crates/v/streamhist.svg)](https://crates.io/crates/streamhist)
+[![Documentation](https://docs.rs/streamhist/badge.svg)](https://docs.rs/streamhist/)
+
 
 A rust implementation of a streaming centroid histogram algorithm found in
 [Streaming Parallel Decision Trees](http://jmlr.org/papers/volume11/ben-haim10a/ben-haim10a.pdf)
