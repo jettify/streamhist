@@ -172,6 +172,7 @@ impl StreamingHistogram {
     /// assert_eq!(hist.count(), 0);
     /// hist.insert_one(10.0);
     /// assert_eq!(hist.count(), 1)
+    /// ```
     pub fn count(&self) -> u64 {
         self.count
     }
@@ -185,6 +186,7 @@ impl StreamingHistogram {
     /// assert_eq!(hist.max(), None);
     /// hist.insert_one(10.0);
     /// assert!(hist.max().unwrap() > 9.0);
+    /// ```
     pub fn max(&self) -> Option<f64> {
         if self.count() == 0 {
             None
@@ -202,6 +204,7 @@ impl StreamingHistogram {
     /// assert_eq!(hist.min(), None);
     /// hist.insert_one(10.0);
     /// assert!(hist.min().unwrap() > 9.0);
+    /// ```
     pub fn min(&self) -> Option<f64> {
         if self.count() == 0 {
             None
@@ -256,6 +259,7 @@ impl StreamingHistogram {
     /// let mut hist = StreamingHistogram::new(32);
     /// hist.insert(10.0, 1);
     /// assert!(hist.mean().unwrap() > 9.0);
+    /// ```
     pub fn mean(&self) -> Option<f64> {
         if self.count == 0 {
             return None;
@@ -282,6 +286,7 @@ impl StreamingHistogram {
     /// hist.insert(10.0, 1);
     /// hist.insert(15.0, 1);
     /// assert!(hist.var().unwrap() < 7.0);
+    /// ```
     pub fn var(&self) -> Option<f64> {
         match self.mean() {
             Some(m) => {
@@ -363,10 +368,36 @@ impl StreamingHistogram {
         Some(ci.value + (cj.value - ci.value) * z)
     }
 
+    /// Returns estimate of median.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// hist.insert(5.0, 1);
+    /// hist.insert(10.0, 1);
+    /// hist.insert(15.0, 1);
+    /// assert!((hist.median().unwrap() - 10.0).abs() < 0.00001);
+    /// ```
     pub fn median(&self) -> Option<f64> {
         self.quantile(0.5)
     }
 
+    /// Merge second histogram into this one.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut one = StreamingHistogram::new(32);
+    /// let mut two = StreamingHistogram::new(32);
+    /// one.insert(5.0, 1);
+    /// one.insert(10.0, 1);
+    /// one.insert(15.0, 1);
+    /// two.insert(20.0, 1);
+    /// two.insert(25.0, 1);
+    /// one.merge(&two);
+    /// assert_eq!(one.count(), 5);
+    /// ```
     pub fn merge(&mut self, other: &Self) {
         for c in other.centroids.iter() {
             self.insert(c.value, c.count)
