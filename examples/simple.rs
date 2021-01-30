@@ -1,9 +1,10 @@
 use rand::SeedableRng;
 use rand_distr::{Distribution, Normal};
 use rand_isaac::Isaac64Rng;
+use std::io::Result;
 use streamhist::StreamingHistogram;
 
-fn main() {
+fn main() -> Result<()> {
     let mut rng = Isaac64Rng::seed_from_u64(42);
     let dist = Normal::new(2.0, 3.0).unwrap();
     let mut hist = StreamingHistogram::new(32);
@@ -39,4 +40,5 @@ fn main() {
     println!("Median                 {:?}", exact_median);
     println!("Count vals <= 2.0      {:?}", exact_sum);
     println!("------------------------------------------------");
+    Ok(())
 }
