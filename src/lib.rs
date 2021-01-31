@@ -322,6 +322,19 @@ impl StreamingHistogram {
         s + (0.5 * ci_count + 0.5 * (ci_count + mb) * r).round() as u64
     }
 
+    /// Returns estimate of quantile. Input defined from 0.0 to 1.0, otherwise
+    /// function returns `None`.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// hist.insert(5.0, 1);
+    /// hist.insert(10.0, 1);
+    /// hist.insert(15.0, 1);
+    /// // same as median
+    /// assert!((hist.quantile(0.5).unwrap() - 10.0).abs() < 0.00001);
+    /// ```
     pub fn quantile(&self, q: f64) -> Option<f64> {
         if self.count == 0 {
             return None;
@@ -404,6 +417,19 @@ impl StreamingHistogram {
         }
     }
 
+    /// Returns estimate number of values observed less then or equal
+    /// then specified.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// hist.insert(5.0, 1);
+    /// hist.insert(10.0, 1);
+    /// hist.insert(15.0, 1);
+    /// assert_eq!(hist.count_less_then_eq(100.0), 3);
+    /// assert_eq!(hist.count_less_then_eq(-100.0), 0);
+    /// ```
     pub fn count_less_then_eq(&self, value: f64) -> u64 {
         self.sum(value)
     }
