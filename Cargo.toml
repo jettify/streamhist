@@ -9,8 +9,8 @@ description = "Implementation of streaming histogram"
 
 exclude = [".github", ".gitignore"]
 
-homepage = "https://github.com/jettify/hyperbitbit"
-repository = "https://github.com/jettify/hyperbitbit.git"
+homepage = "https://github.com/jettify/streamhist"
+repository = "https://github.com/jettify/streamhist.git"
 
 keywords = ["collections", "data-structures", "probabilistic"]
 categories = ["algorithms", "data-structures"]
