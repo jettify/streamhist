@@ -230,12 +230,13 @@ impl StreamingHistogram {
             if self.centroids[idx].value == value {
                 self.centroids[idx].count += count;
                 return;
+            } else {
+                self.centroids.insert(k.unwrap(), c);
             }
         } else {
             self.centroids.push(c);
-            return;
         }
-        self.centroids.insert(k.unwrap(), c);
+
         if self.centroids.len() <= usize::try_from(self.max_centroids).unwrap() {
             return;
         }
@@ -309,7 +310,11 @@ impl StreamingHistogram {
             return 0;
         }
         let k = self.centroids.iter().position(|c| c.value > value).unwrap();
-        let s: u64 = self.centroids.iter().take(k - 1).map(|c| c.count).sum();
+        let s: u64 = if k > 0 {
+            self.centroids.iter().take(k - 1).map(|c| c.count).sum()
+        } else {
+            0
+        };
 
         let (ci, cj) = self.border_centroids(k);
         if ci.count > 0 && (cj.count > 0 && cj.value == value) {
@@ -412,6 +417,8 @@ impl StreamingHistogram {
     /// assert_eq!(one.count(), 5);
     /// ```
     pub fn merge(&mut self, other: &Self) {
+        self.min = f64::min(self.min, other.min);
+        self.max = f64::max(self.max, other.max);
         for c in other.centroids.iter() {
             self.insert(c.value, c.count)
         }
@@ -567,16 +574,41 @@ mod tests {
         assert_eq!(hist.closest_centroids(), 1);
     }
     #[test]
+    fn test_max_centroids() {
+        let mut hist = StreamingHistogram::new(3);
+        hist.insert(1.0, 1);
+        hist.insert(3.0, 1);
+        hist.insert(5.0, 1);
+        hist.insert(7.0, 1);
+        hist.insert(11.0, 1);
+
+        println!("{:?}", hist);
+
+        assert_eq!(hist.max_centroids, 3);
+        assert_eq!(hist.centroids.len(), 3);
+    }
+
+    #[test]
     fn test_merge() {
         let mut hist = StreamingHistogram::new(3);
         let mut other = StreamingHistogram::new(3);
         hist.insert(1.0, 1);
+        hist.insert(3.0, 1);
         hist.insert(5.0, 1);
+        hist.insert(7.0, 1);
+        hist.insert(11.0, 1);
+        hist.insert(11.5, 1);
 
-        other.insert(10.0, 10);
-        other.insert(20.0, 10);
+        assert_eq!(hist.centroids.len(), 3);
+        println!("{:?}", hist);
+
+        other.insert(4.0, 10);
+        other.insert(6.0, 10);
         hist.merge(&other);
-        assert_eq!(hist.count(), 22);
+        assert_eq!(hist.count(), 26);
+        assert_relative_eq!(hist.min().unwrap(), 1.0);
+        assert_relative_eq!(hist.max().unwrap(), 11.5);
+        println!("{:?}", hist);
     }
 
     fn assert_distribution(mut vals: Vec<f64>, mut hist: StreamingHistogram, tol: f64) {
@@ -636,7 +668,7 @@ mod tests {
         let dist = LogNormal::new(1.0, 1.0).unwrap();
         let hist = StreamingHistogram::new(64);
 
-        let tol = 0.02;
+        let tol = 0.05;
         let maxn = 10000;
         let vals: Vec<f64> = (0..maxn).map(|_| dist.sample(&mut rng)).collect();
         assert_distribution(vals, hist, tol)
@@ -682,7 +714,7 @@ mod tests {
         let dist = Normal::new(2.0, 3.0).unwrap();
         let hist = StreamingHistogram::new(1);
 
-        let tol = 0.5;
+        let tol = 1.0;
         let maxn = 10000;
         let vals: Vec<f64> = (0..maxn).map(|_| dist.sample(&mut rng)).collect();
         assert_distribution(vals, hist, tol)
