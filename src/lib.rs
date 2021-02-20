@@ -38,6 +38,7 @@
 //!```
 
 #![warn(clippy::all)]
+#![allow(clippy::needless_doctest_main)]
 
 use std::convert::TryFrom;
 
@@ -127,7 +128,7 @@ impl StreamingHistogram {
         StreamingHistogram {
             min: f64::MAX,
             max: f64::MIN,
-            max_centroids: max_centroids,
+            max_centroids,
             count: 0,
             centroids: Vec::with_capacity(size),
         }
@@ -227,6 +228,7 @@ impl StreamingHistogram {
         let k = self.centroids.iter().position(|c| c.value >= value);
 
         if let Some(idx) = k {
+            #[allow(clippy::float_cmp)]
             if self.centroids[idx].value == value {
                 self.centroids[idx].count += count;
                 return;
@@ -317,6 +319,8 @@ impl StreamingHistogram {
         };
 
         let (ci, cj) = self.border_centroids(k);
+
+        #[allow(clippy::float_cmp)]
         if ci.count > 0 && (cj.count > 0 && cj.value == value) {
             return s + cj.count;
         }
@@ -340,6 +344,7 @@ impl StreamingHistogram {
     /// // same as median
     /// assert!((hist.quantile(0.5).unwrap() - 10.0).abs() < 0.00001);
     /// ```
+    #[allow(clippy::many_single_char_names)]
     pub fn quantile(&self, q: f64) -> Option<f64> {
         if self.count == 0 {
             return None;
@@ -351,20 +356,20 @@ impl StreamingHistogram {
             return Some(self.max);
         }
 
-        let t: f64 = q * (self.count as f64);
+        let target: f64 = q * (self.count as f64);
         let mut prev_half_count = 0.0;
-        let mut s: f64 = 0.0;
+        let mut sum: f64 = 0.0;
         let mut idx: Option<usize> = None;
 
         for (i, c) in self.centroids.iter().enumerate() {
             let half_count = (c.count as f64) / 2.0;
 
-            if s + half_count + prev_half_count > t {
+            if sum + half_count + prev_half_count > target {
                 idx = Some(i);
                 break;
             }
 
-            s += half_count + prev_half_count;
+            sum += half_count + prev_half_count;
             prev_half_count = half_count;
         }
         // TODO check this logic
@@ -375,15 +380,18 @@ impl StreamingHistogram {
 
         let ci_count = ci.count as f64;
         let cj_count = cj.count as f64;
-        let d = t - s;
+
+        let rem = target - sum;
+        // where a, b, c are coefficient of quadratic equation
         let a = (cj_count - ci_count) as f64;
         if a == 0.0 {
-            return Some(ci.value + (cj.value - ci.value) * (d / ci_count));
+            return Some(ci.value + (cj.value - ci.value) * (rem / ci_count));
         }
         let b = 2.0 * ci_count;
-        let c = -2.0 * d;
-        let z = (-b + (b * b - 4.0 * a * c).sqrt()) / (2.0 * a);
-        Some(ci.value + (cj.value - ci.value) * z)
+        let c = -2.0 * rem;
+        // Find point between centroids ci and cj we expect quantile to be
+        let ratio = (-b + (b * b - 4.0 * a * c).sqrt()) / (2.0 * a);
+        Some(ci.value + (cj.value - ci.value) * ratio)
     }
 
     /// Returns estimate of median.
