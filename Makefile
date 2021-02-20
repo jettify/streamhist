@@ -5,8 +5,8 @@ build:
 	cargo test  --all-features
 
 lint:
-	touch src/lib.rs
 	cargo check
+	cargo clean
 	cargo clippy
 
 clean:
