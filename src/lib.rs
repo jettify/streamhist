@@ -158,7 +158,7 @@ impl StreamingHistogram {
     /// ```
     /// use streamhist::StreamingHistogram;
     /// let mut hist = StreamingHistogram::new(32);
-    /// assert!(hist.is_empty(), 1);
+    /// assert!(hist.is_empty());
     /// ```
     pub fn is_empty(&self) -> bool {
         self.count == 0
