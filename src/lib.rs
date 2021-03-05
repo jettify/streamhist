@@ -54,8 +54,8 @@ use serde_crate::{Deserialize, Serialize};
     serde(crate = "serde_crate")
 )]
 struct Centroid {
-    value: f64, // p
-    count: u64, // m
+    value: f64, // denoted as p in paper
+    count: u64, // denoted as m in paper
 }
 
 impl Centroid {
@@ -214,10 +214,31 @@ impl StreamingHistogram {
         }
     }
 
+    /// Insert observed value into histogram.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.count(), 0);
+    /// hist.insert_one(10.0);
+    /// assert_eq!(hist.count(), 1);
+    /// ```
     pub fn insert_one(&mut self, value: f64) {
         self.insert(value, 1)
     }
 
+    /// Insert observed value into histogram with count how many such values
+    /// to add.
+    ///
+    /// # Example
+    /// ```
+    /// use streamhist::StreamingHistogram;
+    /// let mut hist = StreamingHistogram::new(32);
+    /// assert_eq!(hist.count(), 0);
+    /// hist.insert(10.0, 5);
+    /// assert_eq!(hist.count(), 5);
+    /// ```
     pub fn insert(&mut self, value: f64, count: u64) {
         self.min = f64::min(self.min, value);
         self.max = f64::max(self.max, value);
@@ -351,8 +372,7 @@ impl StreamingHistogram {
         }
         if q < 0.0 {
             return Some(self.min);
-        }
-        if q > 1.0 {
+        } else if q > 1.0 {
             return Some(self.max);
         }
 
